@@ -56,7 +56,7 @@ We should specify (independent of used crypto library) whether P256 seed is inte
 
 Outputs (sent to RP):
 
-- Credential ID: version || tag || raw_credential_id || seed_generator_metadata
+- Credential ID: version || raw_credential_id || seed_generator_metadata || tag
 - P256 public key
 
 
@@ -67,7 +67,7 @@ Note that the signatures the authenticator makes are over clientData (which cont
 
 ### GetAssertion
 
-Inputs: credentiald, rpIdHash
+Inputs: credentialId, rpIdHash
 
 Steps:
 
