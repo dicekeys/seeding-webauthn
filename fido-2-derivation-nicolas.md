@@ -41,11 +41,9 @@ Inputs: rpIdHash (32B, e.g. H(example.com)), userId (RP-assigned and password-ve
 Construct:
 
 - version = 1 = 0x01
-- seed_generator_type = byte (0 or byte absent => unspecified, 1 => DiceKeys)
-- seed_generators_state = byte[] (0 to n bytes for n <= some constraint set by authenticator)
-- seed_generator_metadata = seed_generator_type || seed_generators_state
+- `optional_metadata_from_seed_generator = byte[]` // arbitrary length byte array
 - raw_credential_id = `H(K1 || userId)`
-- tag = `H(K2 || raw_credential_id || rpIdHash || seed_generator_metadata)`
+- tag = `H(K2 || raw_credential_id || rpIdHash || optional_metadata_from_seed_generator)`
 - P256 seed (secret scalar) = `H(K3 || tag)`: tag is used as we don't have the RP in the raw ID
 
 If cryptographically necessary, use HMAC(K, -) instead of H(K || -) as appropriate, I don't think there are any length extension attacks applicable here.
@@ -56,7 +54,7 @@ We should specify (independent of used crypto library) whether P256 seed is inte
 
 Outputs (sent to RP):
 
-- Credential ID: version || raw_credential_id || seed_generator_metadata || tag
+- Credential ID: version || raw_credential_id || optional_metadata_from_seed_generator || tag
 - P256 public key
 
 
