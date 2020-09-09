@@ -42,9 +42,9 @@ Construct:
 
 - version = 1 = 0x01
 - `optional_metadata_from_seed_generator = byte[]` // arbitrary length byte array
-- raw_credential_id = `H(K1 || userId)`
-- tag = `H(K2 || raw_credential_id || rpIdHash || optional_metadata_from_seed_generator)`
-- P256 seed (secret scalar) = `H(K3 || tag)`: tag is used as we don't have the RP in the raw ID
+- credential_id_field = `H(K, || "credential_id_field" || userId || hash)`
+- tag = `H(K, 2 || "credential_mac" || rpIdHash || optional_metadata_from_seed_generator)`
+- P256 seed (secret scalar) = `H(K, "p256_secret_key" || rp_id || tag)`: tag is used as we don't have the RP in the raw ID
 
 If cryptographically necessary, use HMAC(K, -) instead of H(K || -) as appropriate, I don't think there are any length extension attacks applicable here.
 
