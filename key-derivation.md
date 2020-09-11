@@ -10,9 +10,36 @@ On calls to [authenticatorGetAssertion](https://www.w3.org/TR/webauthn/#op-get-a
 ## Open issues
 
  - Choose a keyed hash function `H(key, preimage)` -- re-ask Joseph Bonneau
- - Can we use a function such that `H(key, preimage) = H(key || preimage)` -- ask Joseph Bonneau
  - Are strings represented b"" null terminated? - Stuart is asking Nicolas
   - Do we need a modular reduction operation as part of the derivation of the secret key?
+
+## Prerequisites
+
+Assume some keyed has function `H(key, use, preImage)`, which `use` is a value that indicates what we are using the hash function to generate.  Two possible ways to implement `H` would be
+
+```
+// well-defined common, but most resource hungry
+H(key, use, preImage) = SHA_256_HMAC(key + use, preimage)
+```
+
+```
+// A similar construction using CBC-MAC, using
+// the last blocks 2 AES blocks as 256-bit hash
+// length can be a 128 bit block
+// Less computation overhead
+H(key, use, preImage) = CBC-MAC(key, iv=0, length || use(preimage) || preImage)
+```
+
+
+```
+// Minimal number of AES block calculations
+// useIndex = 1, 2, 3...
+// (iv big endian?)
+H(key, use, preImage) = CBC-MAC(key, iv = useIndex * 2^64 + length(preimage), preImage)
+```
+
+
+
 
 ## Inputs
 
@@ -46,7 +73,7 @@ credentialId = version || uniqueId || extState || credentialMac
 To support an optional deterministic mode, in which an observer that knows `seekKey` can verify that the authenticator generated the `credentialId` correctly, use the following formula for the `uniqueID`:
 
 ```
-uniqueId = H(seedKey, b"uniqueId" || rpId || userId || hash)
+uniqueId = H(seedKey, b"uniqueId", rpId || userId || hash)
 ```
 
 where **`hash`** is a parameter passed to [authenticatorMakeCredential](https://www.w3.org/TR/webauthn/#op-make-cred) and **`userId`** is the [`id`](https://www.w3.org/TR/webauthn/#dom-publickeycredentialrpentity-id) field of the [`userEntity`](https://www.w3.org/TR/webauthn/#dictdef-publickeycredentialuserentity) parameter.
@@ -57,7 +84,7 @@ where **`hash`** is a parameter passed to [authenticatorMakeCredential](https://
 **`credentialMac`** is a message authentication code that ensures the Credential ID has not been modified since it was created by the authenticator.
 
 ```
-credentialMac = H(seedKey, b"credentialMac" || rpId || version || uniqueId || extState)
+credentialMac = H(seedKey, b"credentialMac", rpId || version || uniqueId || extState)
 ```
 
 ### Deriving the ES256 public key
@@ -98,7 +125,7 @@ If `version 1 != 1` terminate the processing of this Credential ID. If no valid 
 Next, recalculate the MAC so that we can verify the Credential ID has not been modified.
 
 ```
-recalculatedCredentialMac = H(seedKey, b"credentialMac" || rpId || version || uniqueId || extState)
+recalculatedCredentialMac = H(seedKey, b"credentialMac", || rpId || version || uniqueId || extState)
 ```
 
 If `recalculatedCredentialMac != credentialMac`, terminate the processing of this Credential ID.  Again, if no valid Credential IIs are found, the list of credentials will be empty and step 6 of the [specification of `authenticatorGetAssertion`](https://www.w3.org/TR/webauthn/#op-get-assertion) dictates that the operation be terminated with a ["NotAllowedError"](https://heycam.github.io/webidl/#notallowederror).
@@ -109,5 +136,5 @@ If `recalculatedCredentialMac != credentialMac`, terminate the processing of thi
 Iff all steps of the above validation process succeed, use the same formula was was used above and authenticate with the secret key.
 
 ```
-es256SPrivateKey = H(seedKey, b"es256SPrivateKey" || rpId || credentialMac)
+es256SPrivateKey = H(seedKey, b"es256SPrivateKey", rpId || credentialMac)
 ```
