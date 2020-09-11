@@ -98,6 +98,20 @@ es256SPrivateKey = H(seedKey, b"es256SPrivateKey" || rpId || credentialMac)
 To derive the public key to send to return, use the existing deterministic algorithm for calculating ES public keys from private keys.
 
 
+
+### Setting the [Signature Counter](https://www.w3.org/TR/webauthn/#signature-counter)
+
+The [W3C's WebAuthN specification](https://www.w3.org/TR/webauthn/#signature-counter) states that "Authenticators SHOULD implement a signature counter feature" and that "the signature counter's purpose is to aid Relying Parties in detecting cloned authenticators."  The W3C uses "SHOULD" as defined by [IETF RFC 2119](https://www.ietf.org/rfc/rfc2119.txt), which states
+
+> This word, or the adjective "RECOMMENDED", mean that there may exist valid reasons in particular circumstances to ignore a particular item, but the full implications must be understood and carefully weighed before choosing a different course.
+
+No reason could be more valid than to support users who choose purchase an authenticator that can be cloned because they want the ability to clone it.  Authenticators following our standard MUST use the approach specified in [WebAuthN Specification Section 6.2.3](https://www.w3.org/TR/webauthn/#op-make-cred), item 10, option 3 to set no signature counter.
+
+> **no signature counter**
+>
+> let the signature counter value for the new credential be constant at zero.
+
+
 ## Implementing [authenticatorGetAssertion](https://www.w3.org/TR/webauthn/#op-get-assertion)
 
 Decoding and validating credential Ids is part of step 3 of the WebAuthN specification for [authenticatorGetAssertion](https://www.w3.org/TR/webauthn/#op-get-assertion).
