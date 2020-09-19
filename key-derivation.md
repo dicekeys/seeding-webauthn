@@ -7,10 +7,6 @@ Specifically, on calls to [authenticatorMakeCredential](https://www.w3.org/TR/we
 On calls to [authenticatorGetAssertion](https://www.w3.org/TR/webauthn/#op-get-assertion), an authenticator will use the `seedKey` to validate that the Credential ID was generated from `seedKey` for use by the requesting relying party, and then to re-derive the private key needed to authenticate.
 
 
-## Open issues
-
-  - Do we need a modular reduction operation as part of the derivation of the secret key?
-
 ## Prerequisites
 
 ## Inputs
@@ -33,10 +29,10 @@ This secret key is the only information an authenticator should require to authe
 ### Constants
 
 ``` 
-credentialIdMask     = 0x0000000000000000000000000000000000000000000000000000000000000011
-es256SPrivateKeyMask1 = 0x0000000000000000000000000000000000000000000000000000000000000022
-es256SPrivateKeyMask2 = 0x0000000000000000000000000000000000000000000000000000000000000023
-uniqueIdMask         = 0x00000000000000000000000000000000000000000000000000000000000000ff
+credentialIdMask     = 0x0100000000000000000000000000000000000000000000000000000000000000
+es256SPrivateKeyMask = 0x0200000000000000000000000000000000000000000000000000000000000000
+es256SPrivateKeyMask = 0x0000000000000000000000000000000000000000000000000000000000000000
+uniqueIdMask         = 0xff00000000000000000000000000000000000000000000000000000000000000
 ```
 
 ### Generating a [Credential ID](https://www.w3.org/TR/webauthn/#credential-id) (**`credentialId`**)
@@ -72,13 +68,26 @@ credentialMac = SHA256HMAC(seedKey XOR credentialMacMask, rpId || version || uni
 
 Derive the private key **`es256SPrivateKey`**  from the `seedKey` on the authenticator, the `rpId` from the relying party, and the `credentialMac` field from the `credentialId` (which, as a MAC, effectively encapsulates the three other fields of `credentialId`.
 
+
+Following [NIST FIPS 186.4](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf) Section Section B.4.2,
+derive the secret key by testing randomly-generated 32-byte candidate sequences c_0, c_1, ... c_i of the form 
+
 ```
-es256SPrivateKey = SHA256HMAC(seedKey XOR es256SPrivateKeyMask, rpId || credentialMac)
+c_i = LE SHA256HMAC(seedKey XOR (es256SPrivateKeyMask ^ i), rpId || credentialMac)
 ```
 
-To derive the public key to send to return, use the existing deterministic algorithm for calculating ES public keys from private keys.
+Where c_i and i are treated as converted between byte arrays and numeric values using little endian representation.
 
+So, the algorithm is:
 
+```
+i = 0;
+c = p;
+for (i=0; c > p-2; i++) {
+  c = LE SHA256HMAC(seedKey XOR (es256SPrivateKeyMask ^ i), rpId || credentialMac)
+}
+d = C + 1  // public key Q = dG
+```
 
 ### Setting the [Signature Counter](https://www.w3.org/TR/webauthn/#signature-counter)
 
@@ -129,7 +138,3 @@ If `recalculatedCredentialMac != credentialMac`, terminate the processing of thi
 ### Re-deriving the **`es256SPrivateKey`**
 
 Iff all steps of the above validation process succeed, use the same formula was was used above and authenticate with the secret key.
-
-```
-es256SPrivateKey = SHA256HMAC(seedKey XOR es256SPrivateKeyMask, rpId || credentialMac)
-```
