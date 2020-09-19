@@ -42,7 +42,7 @@ credentialId = version || uniqueId || extState || credentialMac
 To support an optional deterministic mode, in which an observer that knows `seekKey` can verify that the authenticator generated the `credentialId` correctly, use the following formula for the `uniqueID`:
 
 ```
-uniqueId = SHA256HMAC( SHA245HMAC( seedKey, salt ) , rpId || userId || hash)
+uniqueId = SHA256HMAC( SHA256HMAC( seedKey, salt ) , rpId || userId || hash)
 ```
 
 where **`salt`** is any string of the implementers choosing and  **`hash`** is a parameter passed to [authenticatorMakeCredential](https://www.w3.org/TR/webauthn/#op-make-cred) and **`userId`** is the [`id`](https://www.w3.org/TR/webauthn/#dom-publickeycredentialrpentity-id) field of the [`userEntity`](https://www.w3.org/TR/webauthn/#dictdef-publickeycredentialuserentity) parameter.
