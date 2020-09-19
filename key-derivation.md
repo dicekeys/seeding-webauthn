@@ -26,14 +26,6 @@ This secret key is the only information an authenticator should require to authe
 
 ## Implementing [authenticatorMakeCredential](https://www.w3.org/TR/webauthn/#op-make-cred)
 
-### Constants
-
-``` 
-credentialIdMask     = 0x0100000000000000000000000000000000000000000000000000000000000000
-es256SPrivateKeyMask = 0x0200000000000000000000000000000000000000000000000000000000000000
-es256SPrivateKeyMask = 0x0000000000000000000000000000000000000000000000000000000000000000
-uniqueIdMask         = 0xff00000000000000000000000000000000000000000000000000000000000000
-```
 
 ### Generating a [Credential ID](https://www.w3.org/TR/webauthn/#credential-id) (**`credentialId`**)
 
@@ -50,10 +42,10 @@ credentialId = version || uniqueId || extState || credentialMac
 To support an optional deterministic mode, in which an observer that knows `seekKey` can verify that the authenticator generated the `credentialId` correctly, use the following formula for the `uniqueID`:
 
 ```
-uniqueId = SHA256HMAC(seedKey XOR uniqueIdMask, rpId || userId || hash)
+uniqueId = SHA256HMAC( SHA245HMAC( seedKey, salt ) , rpId || userId || hash)
 ```
 
-where **`hash`** is a parameter passed to [authenticatorMakeCredential](https://www.w3.org/TR/webauthn/#op-make-cred) and **`userId`** is the [`id`](https://www.w3.org/TR/webauthn/#dom-publickeycredentialrpentity-id) field of the [`userEntity`](https://www.w3.org/TR/webauthn/#dictdef-publickeycredentialuserentity) parameter.
+where **`salt`** is any string of the implementers choosing and  **`hash`** is a parameter passed to [authenticatorMakeCredential](https://www.w3.org/TR/webauthn/#op-make-cred) and **`userId`** is the [`id`](https://www.w3.org/TR/webauthn/#dom-publickeycredentialrpentity-id) field of the [`userEntity`](https://www.w3.org/TR/webauthn/#dictdef-publickeycredentialuserentity) parameter.
 
 **`extState`** , defined [above](#Inputs) is an optional byte array of any length from 0 to 256 bytes, where the absence of the optional value is treated as a zero-length byte array.
 
@@ -61,7 +53,7 @@ where **`hash`** is a parameter passed to [authenticatorMakeCredential](https://
 **`credentialMac`** is a message authentication code that ensures the Credential ID has not been modified since it was created by the authenticator.
 
 ```
-credentialMac = SHA256HMAC(seedKey XOR credentialMacMask, rpId || version || uniqueId || extState)
+credentialMac = SHA256HMAC(seedKey, rpId || version || uniqueId || extState)
 ```
 
 ### Deriving the ES256 public key
@@ -73,7 +65,8 @@ Following [NIST FIPS 186.4](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186
 derive the secret key by testing randomly-generated 32-byte candidate sequences c_0, c_1, ... c_i of the form 
 
 ```
-c_i = LE SHA256HMAC(seedKey XOR (es256SPrivateKeyMask ^ i), rpId || credentialMac)
+c[0] = SHA256HMAC(seedKey, rpId || credentialMac)
+c[i] = SHA256HMAC(seedKey, c[i-1])
 ```
 
 Where c_i and i are treated as converted between byte arrays and numeric values using little endian representation.
@@ -81,12 +74,14 @@ Where c_i and i are treated as converted between byte arrays and numeric values 
 So, the algorithm is:
 
 ```
-i = 0;
-c = p;
-for (i=0; c > p-2; i++) {
-  c = LE SHA256HMAC(seedKey XOR (es256SPrivateKeyMask ^ i), rpId || credentialMac)
+c = SHA256HMAC(seedKey, rpId || credentialMac);
+while (c <= p-2) {
+  c = SHA256HMAC(seedKey, c);
 }
-d = C + 1  // public key Q = dG
+// d is the private key
+d = C + 1
+// Q is the public key
+Q = dG
 ```
 
 ### Setting the [Signature Counter](https://www.w3.org/TR/webauthn/#signature-counter)
@@ -129,7 +124,7 @@ If `version 1 != 1` terminate the processing of this Credential ID. If no valid 
 Next, recalculate the MAC so that we can verify the Credential ID has not been modified.
 
 ```
-recalculatedCredentialMac = SHA256HMAC(seedKey XOR credentialMacMask, rpId || version || uniqueId || extState)
+recalculatedCredentialMac = SHA256HMAC(seedKey, rpId || version || uniqueId || extState)
 ```
 
 If `recalculatedCredentialMac != credentialMac`, terminate the processing of this Credential ID.  Again, if no valid Credential IIs are found, the list of credentials will be empty and step 6 of the [specification of `authenticatorGetAssertion`](https://www.w3.org/TR/webauthn/#op-get-assertion) dictates that the operation be terminated with a ["NotAllowedError"](https://heycam.github.io/webidl/#notallowederror).
@@ -137,4 +132,4 @@ If `recalculatedCredentialMac != credentialMac`, terminate the processing of thi
 
 ### Re-deriving the **`es256SPrivateKey`**
 
-Iff all steps of the above validation process succeed, use the same formula was was used above and authenticate with the secret key.
+Iff all steps of the above validation process succeed, use the same formula was was used above and authenticate with the secret key (_d_).
