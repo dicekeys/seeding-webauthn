@@ -9,7 +9,6 @@ On calls to [authenticatorGetAssertion](https://www.w3.org/TR/webauthn/#op-get-a
 
 ## Open issues
 
- - Are strings represented b"" null terminated? - Stuart is asking Nicolas
   - Do we need a modular reduction operation as part of the derivation of the secret key?
 
 ## Prerequisites
@@ -31,6 +30,15 @@ This secret key is the only information an authenticator should require to authe
 
 ## Implementing [authenticatorMakeCredential](https://www.w3.org/TR/webauthn/#op-make-cred)
 
+### Constants
+
+``` 
+credentialIdMask     = 0x0000000000000000000000000000000000000000000000000000000000000011
+es256SPrivateKeyMask1 = 0x0000000000000000000000000000000000000000000000000000000000000022
+es256SPrivateKeyMask2 = 0x0000000000000000000000000000000000000000000000000000000000000023
+uniqueIdMask         = 0x00000000000000000000000000000000000000000000000000000000000000ff
+```
+
 ### Generating a [Credential ID](https://www.w3.org/TR/webauthn/#credential-id) (**`credentialId`**)
 
 Generate a Credential ID by concatenating four fields.
@@ -46,7 +54,7 @@ credentialId = version || uniqueId || extState || credentialMac
 To support an optional deterministic mode, in which an observer that knows `seekKey` can verify that the authenticator generated the `credentialId` correctly, use the following formula for the `uniqueID`:
 
 ```
-uniqueId = SHA256HMAC(seedKey, b"uniqueId" || rpId || userId || hash)
+uniqueId = SHA256HMAC(seedKey XOR uniqueIdMask, rpId || userId || hash)
 ```
 
 where **`hash`** is a parameter passed to [authenticatorMakeCredential](https://www.w3.org/TR/webauthn/#op-make-cred) and **`userId`** is the [`id`](https://www.w3.org/TR/webauthn/#dom-publickeycredentialrpentity-id) field of the [`userEntity`](https://www.w3.org/TR/webauthn/#dictdef-publickeycredentialuserentity) parameter.
@@ -57,7 +65,7 @@ where **`hash`** is a parameter passed to [authenticatorMakeCredential](https://
 **`credentialMac`** is a message authentication code that ensures the Credential ID has not been modified since it was created by the authenticator.
 
 ```
-credentialMac = SHA256HMAC(seedKey, b"credentialMac" || rpId || version || uniqueId || extState)
+credentialMac = SHA256HMAC(seedKey XOR credentialMacMask, rpId || version || uniqueId || extState)
 ```
 
 ### Deriving the ES256 public key
@@ -65,7 +73,7 @@ credentialMac = SHA256HMAC(seedKey, b"credentialMac" || rpId || version || uniqu
 Derive the private key **`es256SPrivateKey`**  from the `seedKey` on the authenticator, the `rpId` from the relying party, and the `credentialMac` field from the `credentialId` (which, as a MAC, effectively encapsulates the three other fields of `credentialId`.
 
 ```
-es256SPrivateKey = SHA256HMAC(seedKey, b"es256SPrivateKey" || rpId || credentialMac)
+es256SPrivateKey = SHA256HMAC(seedKey XOR es256SPrivateKeyMask, rpId || credentialMac)
 ```
 
 To derive the public key to send to return, use the existing deterministic algorithm for calculating ES public keys from private keys.
@@ -112,7 +120,7 @@ If `version 1 != 1` terminate the processing of this Credential ID. If no valid 
 Next, recalculate the MAC so that we can verify the Credential ID has not been modified.
 
 ```
-recalculatedCredentialMac = SHA256HMAC(seedKey, b"credentialMac" || rpId || version || uniqueId || extState)
+recalculatedCredentialMac = SHA256HMAC(seedKey XOR credentialMacMask, rpId || version || uniqueId || extState)
 ```
 
 If `recalculatedCredentialMac != credentialMac`, terminate the processing of this Credential ID.  Again, if no valid Credential IIs are found, the list of credentials will be empty and step 6 of the [specification of `authenticatorGetAssertion`](https://www.w3.org/TR/webauthn/#op-get-assertion) dictates that the operation be terminated with a ["NotAllowedError"](https://heycam.github.io/webidl/#notallowederror).
@@ -123,5 +131,5 @@ If `recalculatedCredentialMac != credentialMac`, terminate the processing of thi
 Iff all steps of the above validation process succeed, use the same formula was was used above and authenticate with the secret key.
 
 ```
-es256SPrivateKey = SHA256HMAC(seedKey, b"es256SPrivateKey" || rpId || credentialMac)
+es256SPrivateKey = SHA256HMAC(seedKey XOR es256SPrivateKeyMask, rpId || credentialMac)
 ```
