@@ -39,7 +39,7 @@ credentialId = version || uniqueId || extState || credentialMac
 
 **`uniqueId`** is _any_ 32-byte value that ensures the Credential Id meets the WebAuthN's requirement of having at least 100 bits of entropy to ensure uniqueness.
 
-To support an optional deterministic mode, in which an observer that knows `seekKey` can verify that the authenticator generated the `credentialId` correctly, use the following formula for the `uniqueID`:
+To support an optional deterministic mode, in which an observer that knows `seekKey` can verify that the authenticator generated the `credentialId` correctly, one can use a deterministic formula such as the one below to calculate the `uniqueID`:
 
 ```
 uniqueId = SHA256HMAC( SHA256HMAC( seedKey, salt ) , rpId || userId || hash)
