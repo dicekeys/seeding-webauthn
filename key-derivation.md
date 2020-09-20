@@ -69,19 +69,20 @@ c[0] = SHA256HMAC(seedKey, rpId || credentialMac)
 c[i] = SHA256HMAC(seedKey, c[i-1])
 ```
 
-Where c_i and i are treated as converted between byte arrays and numeric values using little endian representation.
-
+The 32-byte blocks are converted to numbers by interpreting them in little endian form. 
 So, the algorithm is:
 
 ```
-c = SHA256HMAC(seedKey, rpId || credentialMac);
+b = SHA256HMAC(seedKey, rpId || credentialMac);
+c = BYTE_ARRAY_TO_UNSIGNED_BIT_INT_LITTLE_ENDIAN(b);
 while (c <= p-2) {
-  c = SHA256HMAC(seedKey, c);
+  b = SHA256HMAC(seedKey, c);
+  c = BYTE_ARRAY_TO_UNSIGNED_BIT_INT_LITTLE_ENDIAN(b);
 }
 // d is the private key
-d = c + 1
+d = c + 1;
 // Q is the public key
-Q = dG
+Q = dG;
 ```
 
 ### Setting the [Signature Counter](https://www.w3.org/TR/webauthn/#signature-counter)
