@@ -10,6 +10,7 @@ Only use cryptographic primitives from the [FIDO Authenticator Allowed Cryptogra
   - AES-256 from [Section 3.1](https://fidoalliance.org/specs/fido-security-requirements-v1.2-2018/fido-authenticator-allowed-cryptography-list-v1.0-wd-20180629.html#confidentiality-algorithms), where the 256 indicates the key size (AES has a foxed 128-bit block size).
   - SHA-256 from [Section 3.2](https://fidoalliance.org/specs/fido-security-requirements-v1.2-2018/fido-authenticator-allowed-cryptography-list-v1.0-wd-20180629.html#hashing-algorithms).
 
+
 ## Algorithm
 
 First, generate a fixed-length 256-bit key identifier _i_ from the arbitrary-length KEYID field.
