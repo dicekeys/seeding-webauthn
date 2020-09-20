@@ -79,7 +79,7 @@ while (c <= p-2) {
   c = SHA256HMAC(seedKey, c);
 }
 // d is the private key
-d = C + 1
+d = c + 1
 // Q is the public key
 Q = dG
 ```
