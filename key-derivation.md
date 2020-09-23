@@ -23,7 +23,7 @@ This secret key is the only information an authenticator should require to authe
 ### Relying Party ID (**`rpId`**) and its hash (**`rpIdHash`**)
 
 
-**`rpId`** is the [relying party identifier](https://www.w3.org/TR/webauthn/#relying-party-identifier) passed to [`authenticatorMakeCredential`](https://www.w3.org/TR/webauthn/#op-make-cred) via the the [`id`](https://www.w3.org/TR/webauthn/#dom-publickeycredentialrpentity-id) field of the [`rpEntity`](https://www.w3.org/TR/webauthn/#dictionary-pkcredentialentity) parameter, and passed to [authenticatorGetAssertion](https://www.w3.org/TR/webauthn/#op-get-assertion) via the  `rpId` parameter.  Its SHA256 hash is name, [*rpIdHash*`][https://www.w3.org/TR/webauthn/#rpidhash] by the WebAuthN standard and can be used where a fixed-length field is advantageous.
+**`rpId`** is the [relying party identifier](https://www.w3.org/TR/webauthn/#relying-party-identifier) passed to [`authenticatorMakeCredential`](https://www.w3.org/TR/webauthn/#op-make-cred) via the the [`id`](https://www.w3.org/TR/webauthn/#dom-publickeycredentialrpentity-id) field of the [`rpEntity`](https://www.w3.org/TR/webauthn/#dictionary-pkcredentialentity) parameter, and passed to [authenticatorGetAssertion](https://www.w3.org/TR/webauthn/#op-get-assertion) via the  `rpId` parameter.  Its SHA256 hash is named [`**rpIdHas*h*`][https://www.w3.org/TR/webauthn/#rpidhash] by the WebAuthN standard.
 
 ```
 rpIdHash = SHA256(rpId)
