@@ -1,6 +1,6 @@
 # Seeded WebAuthN Authenticator Specification
 
-This specification defines how create credentials for [WebAuthN]((https://www.w3.org/TR/webauthn))/FIDO2 from a 256-bit seed key (**`seedKey`**) and to authenticate with those credentials.
+This specification defines how create non-resident credentials for [WebAuthN]((https://www.w3.org/TR/webauthn))/FIDO2 from a 256-bit seed key (**`seedKey`**) and to authenticate with those credentials.
 
 Specifically, on calls to [authenticatorMakeCredential](https://www.w3.org/TR/webauthn/#op-make-cred), an authenticator will use the `seedKey` to generate a [Credential ID](https://www.w3.org/TR/webauthn/#credential-id) and public/private authentication key pair, sending the Credential ID and public key to the relying party.
 
@@ -23,7 +23,7 @@ This secret key is the only information an authenticator should require to authe
 ### Relying Party ID (**`rpId`**) and its hash (**`rpIdHash`**)
 
 
-**`rpId`** is the [relying party identifier](https://www.w3.org/TR/webauthn/#relying-party-identifier) passed to [`authenticatorMakeCredential`](https://www.w3.org/TR/webauthn/#op-make-cred) via the the [`id`](https://www.w3.org/TR/webauthn/#dom-publickeycredentialrpentity-id) field of the [`rpEntity`](https://www.w3.org/TR/webauthn/#dictionary-pkcredentialentity) parameter, and passed to [authenticatorGetAssertion](https://www.w3.org/TR/webauthn/#op-get-assertion) via the  `rpId` parameter.  Its SHA256 hash is named [`**rpIdHas*h*`][https://www.w3.org/TR/webauthn/#rpidhash] by the WebAuthN standard.
+**`rpId`** is the [relying party identifier](https://www.w3.org/TR/webauthn/#relying-party-identifier) passed to [`authenticatorMakeCredential`](https://www.w3.org/TR/webauthn/#op-make-cred) via the the [`id`](https://www.w3.org/TR/webauthn/#dom-publickeycredentialrpentity-id) field of the [`rpEntity`](https://www.w3.org/TR/webauthn/#dictionary-pkcredentialentity) parameter, and passed to [authenticatorGetAssertion](https://www.w3.org/TR/webauthn/#op-get-assertion) via the  `rpId` parameter.  Its SHA256 hash is named [**`rpIdHash`**](https://www.w3.org/TR/webauthn/#rpidhash) by the WebAuthN standard.
 
 ```
 rpIdHash = SHA256(rpId)
@@ -43,16 +43,7 @@ credentialId = version || uniqueId || extState || credentialMac
 **`version`** is a single byte and should be set to 1 (`0x01`).
 
 **`uniqueId`** is _any_ 32-byte value that ensures the Credential Id meets the WebAuthN's requirement of having at least 100 bits of entropy to ensure uniqueness.
-
-To support an optional deterministic mode, in which an observer that knows `seekKey` can verify that the authenticator generated the `credentialId` correctly, one can use a deterministic formula such as the one below to calculate the `uniqueID`:
-
-```
-uniqueId = SHA256HMAC( SHA256HMAC(seedKey, salt), rpIdHash || userId || hash)
-```
-
-where **`salt`** is any string of the implementers choosing and  **`hash`** is a parameter passed to [authenticatorMakeCredential](https://www.w3.org/TR/webauthn/#op-make-cred) and **`userId`** is the [`id`](https://www.w3.org/TR/webauthn/#dom-publickeycredentialrpentity-id) field of the [`userEntity`](https://www.w3.org/TR/webauthn/#dictdef-publickeycredentialuserentity) parameter.
-
-**`extState`** , defined [above](#Inputs) is an optional byte array of any length from 0 to 256 bytes, where the absence of the optional value is treated as a zero-length byte array.
+To generate this value deterministically so that an observer with knowledge of `seekKey` can verify that the authenticator generated the `credentialId` correctly, see the [Appendix](Appendix-1:-Deterministic-generation-of-`uniqueId`s).
 
 
 **`credentialMac`** is a message authentication code that ensures the Credential ID has not been modified since it was created by the authenticator.
@@ -63,71 +54,31 @@ credentialMac = SHA256HMAC(seedKey, rpIdHash || version || uniqueId || extState)
 
 ### Deriving the ES256 public key
 
-Derive the private key **`es256SPrivateKey`**  from the `seedKey` on the authenticator, the `rpIdHash` from the relying party, and the `credentialMac` field from the `credentialId` (which, as a MAC, effectively encapsulates the three other fields of `credentialId`.
+The private key **`es256SPrivateKey`**  is generated from the `seedKey` on the authenticator, the `rpIdHash` from the relying party, and the `credentialMac` field from the `credentialId` (which, as a MAC, effectively encapsulates the three other fields of `credentialId`.
 
-
-Following [NIST FIPS 186.4](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf) Section Section B.4.2,
-derive the secret key by testing randomly-generated 32-byte candidate sequences C[0], C[1], ... of the form 
+We use the method of key pair generation by testing candidates as described in [NIST FIPS 186.4](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf) Section B.4.2, substituting in for the random bit generator a deterministic pseudo-random bit generator that generates a stream of 256-bit blocks `C[i]` of the form:
 
 ```
 C[0] = SHA256HMAC(seedKey, credentialMac)
 C[i] = SHA256HMAC(seedKey, C[i-1])
 ```
 
-The (pseudo)random 32-byte blocks are converted to pseudorandom numbers by interpreting them in
-little endian form and then subtracting 1.  (The reason for subtracting 1 will be covered shortly.)
-```
-c = BYTE_ARRAY_TO_UNSIGNED_BIG_INT_LITTLE_ENDIAN(C[i]) - 1;
-```
-
-[NIST FIPS 186.4](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf) B.4.2 specifies the
-following algorithm
+The algorithm is as follows:
 
 ```
-var i = 0;
-var c;
-do () {
-  // B.4.2 Step 4: Obtain a string of N returned_bits from an RBG with a security strength
-  // (Our deterministic random bit generation algorithm is not part of B.4.2)
-  C[i] = i == 0 ? SHA256HMAC(seedKey, credentialMac) : SHA256HMAC(seedKey, C[i-1]);
-  i = i +1;
-
-  // B.4.2. Step 5: Convert returned_bits to the (non-negative) integer c (see Appendix C.2.1).
-  c = BYTE_ARRAY_TO_UNSIGNED_BIG_INT_LITTLE_ENDIAN(C[i]) - 1;
-
-} while (c > p-2) // B.4.2 Step 6 
-
-// B.4.2. Step 7 (d is the private key)
-d = c + 1;
-
-// B.4.2. Step 8 (Q is the public key)
-Q = dG;
+C = SHA256HMAC(seedKey, credentialMac);
+cPlusOne = BYTE_ARRAY_TO_UNSIGNED_BIG_INT_LITTLE_ENDIAN(C)
+while (cPlusOne >= p || cPlusOne == 0) {
+  C = SHA256HMAC(seedKey, C);
+  cPlusOne = BYTE_ARRAY_TO_UNSIGNED_BIG_INT_LITTLE_ENDIAN(C);
+}
+d = cPlusOne; // d is the private key
+Q = dG; // (Q is the public key)
 ```
 
-Subtracting one when converting the bits to an unsigned integer c (Step 5)
-allows us to simplify implementations to use a common candidate-testing feature in hardware,
-while still conforming to [NIST FIPS 186.4](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf) B.4.2.
-
-```
-var i = 0;
-var c;
-do () {
-  // B.4.2 Step 4: Obtain a string of N returned_bits from an RBG with a security strength
-  // (Our deterministic random bit generation algorithm is not part of B.4.2)
-  C[i] = i == 0 ? SHA256HMAC(seedKey, credentialMac) : SHA256HMAC(seedKey, C[i-1]);
-  i = i +1;
-
-  // B.4.2. Step 5: Convert returned_bits to the (non-negative) integer c (see Appendix C.2.1).
-  cPlusOne = BYTE_ARRAY_TO_UNSIGNED_BIG_INT_LITTLE_ENDIAN(C[i]);
-
-} while (cPlusOne >= p || cPlusOne == 0) // B.4.2 Step 6 
-
-// B.4.2. Step 7 (d is the private key)
-d = cPlusOne;
-
-// B.4.2. Step 8 (Q is the public key)
-Q = dG;
-```
+We named the candidate private keys in the above algorithm `cPlusOne` for the proof in
+[Appendix 2](#Appendix-2:-Compliance-with-NIST-FIPS.186-4) that this algorithm is compliant with
+[NIST FIPS 186.4](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf) Section B.4.2.
 
 
 ### Setting the [Signature Counter](https://www.w3.org/TR/webauthn/#signature-counter)
@@ -179,3 +130,54 @@ If `recalculatedCredentialMac != credentialMac`, terminate the processing of thi
 ### Re-deriving the **`es256SPrivateKey`**
 
 Iff all steps of the above validation process succeed, use the same formula was was used above and authenticate with the secret key (_d_).
+
+
+## Appendix 1: Deterministic generation of `uniqueId`s
+
+To support an optional deterministic mode, in which an observer that knows `seekKey` can verify that the authenticator generated the `credentialId` correctly, one can use a deterministic formula such as the one below to calculate the `uniqueID`:
+
+```
+uniqueId = SHA256HMAC( SHA256HMAC(seedKey, salt), rpIdHash || userId || clientDataHash)
+```
+
+where
+ - **`salt`** is any string of the implementers choosing,
+ - **`userId`** is the [`id`](https://www.w3.org/TR/webauthn/#dom-publickeycredentialrpentity-id) field of the [`userEntity`](https://www.w3.org/TR/webauthn/#dictdef-publickeycredentialuserentity) parameter, and
+ - **`clientDataHash`** is the [hash of the serialized client data](https://www.w3.org/TR/webauthn/#collectedclientdata-hash-of-the-serialized-client-data) passed as the `hash` parameter passed of [authenticatorMakeCredential](https://www.w3.org/TR/webauthn/#op-make-cred).
+ 
+ The `clientDataHash` field is included ensure that if a user registers their key, un-registers it, and then re-registers it, the second registration will have a different `uniqueId` than the first. This is necessary because relying parties may reasonably assume that the same `credentialId` never be registered twice.  For example, a relying party might be implemented to maintain a set of un-registered `credentialId`s and treat any member of the set as permanently unregistered. Such an implementation would not allow the user to re-register a key after un-registering it, as the uniqueId generated only from the `rpIdHash` and `userId` would not change between the two registrations.
+
+ ## Appendix 2: Compliance with NIST FIPS.186-4
+
+
+To comply with [NIST FIPS 186.4](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf) Section B.4.2, we must perform the following steps (square brackets indicate our notes):
+
+
+ - Step 4: Obtain a string of N [256] `returned_bits` from an RBG [random bit generator].
+ - Step 5: Convert `returned_bits` to the (non-negative) integer `c` (see Appendix C.2.1).
+ - Step 6: If `(c > p–2)`, then go to step 4:  [for P-256, the `n` of Step 6 is set to `p`]
+ - Step 7: d = c + 1.
+ - Step 8: Q = dG.
+
+The implementer is given freedom to choose the means of converting the `returned_bits` into an integer (Step 5), and so for Step 5 we choose to set `c` equal to the little endian representation of `returned_bits` *minus 1*.
+
+```
+c = BYTE_ARRAY_TO_UNSIGNED_BIG_INT_LITTLE_ENDIAN(C[i]) - 1
+```
+
+Rather than working with `c` directly, our algorithm works with `cPlusOne = c + 1`, which is just the little-endian representation of the 32 pseudorandom bytes. Using algebra to replace `c` with `cPlusOne` in Step 6:
+
+```
+(c > p - 2)
+(c + 1 > p - 2 + 1 || c + 1 == 0)
+(cPlusOne > p - 1 || cPlusOne == 0)
+(cPlusOne >= p || cPlusOne == 0)
+```
+
+Substituting `cPlusOne` for `c` simplifies Step 7:
+```
+d = c + 1
+d = cPlusOne
+```
+
+The other steps are unaffected.
