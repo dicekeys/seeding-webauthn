@@ -20,9 +20,14 @@ This secret key is the only information an authenticator should require to authe
 
 **`extState`** is an optional field of 0 and 256 bytes and is written to the authenticator along with the `seedKey`.  It is stored in plaintext within the Credential ID so that the relying party will keep a copy of it and share it with any party that attempts to authenticate. The field may contain information used to locate or re-generate the `seedKey` if an authenticator needs to be replaced.  Since this field is stored in plaintext with the relying party, it should not be used without careful consideration of the risks of sharing the information therein with the relying party, and the potential to make Credential IDs linkable.  (The degree of this risk depends on whether the value is quite common among multiple users or unique to each user.)
 
-### Relying Party ID (**`rpId`**)
+### Relying Party ID (**`rpId`**) and hash (**`rpIdHash`**)
 
-**`rpId`** is the [relying party identifier](https://www.w3.org/TR/webauthn/#relying-party-identifier) passed to [`authenticatorMakeCredential`](https://www.w3.org/TR/webauthn/#op-make-cred) via the the [`id`](https://www.w3.org/TR/webauthn/#dom-publickeycredentialrpentity-id) field of the [`rpEntity`](https://www.w3.org/TR/webauthn/#dictionary-pkcredentialentity) parameter, and passed to [authenticatorGetAssertion](https://www.w3.org/TR/webauthn/#op-get-assertion) via the  `rpId` parameter. 
+
+**`rpId`** is the [relying party identifier](https://www.w3.org/TR/webauthn/#relying-party-identifier) passed to [`authenticatorMakeCredential`](https://www.w3.org/TR/webauthn/#op-make-cred) via the the [`id`](https://www.w3.org/TR/webauthn/#dom-publickeycredentialrpentity-id) field of the [`rpEntity`](https://www.w3.org/TR/webauthn/#dictionary-pkcredentialentity) parameter, and passed to [authenticatorGetAssertion](https://www.w3.org/TR/webauthn/#op-get-assertion) via the  `rpId` parameter.  Its SHA256 hash is name, [*rpIdHash*`][https://www.w3.org/TR/webauthn/#rpidhash] by the WebAuthN standard and can be used where a fixed-length field is advantageous.
+
+```
+rpIdHash = SHA256(rpId)
+```
 
 ## Implementing [authenticatorMakeCredential](https://www.w3.org/TR/webauthn/#op-make-cred)
 
@@ -42,7 +47,7 @@ credentialId = version || uniqueId || extState || credentialMac
 To support an optional deterministic mode, in which an observer that knows `seekKey` can verify that the authenticator generated the `credentialId` correctly, one can use a deterministic formula such as the one below to calculate the `uniqueID`:
 
 ```
-uniqueId = SHA256HMAC( SHA256HMAC( seedKey, salt ) , rpId || userId || hash)
+uniqueId = SHA256HMAC( SHA256HMAC(seedKey, salt), rpIdHash || userId || hash)
 ```
 
 where **`salt`** is any string of the implementers choosing and  **`hash`** is a parameter passed to [authenticatorMakeCredential](https://www.w3.org/TR/webauthn/#op-make-cred) and **`userId`** is the [`id`](https://www.w3.org/TR/webauthn/#dom-publickeycredentialrpentity-id) field of the [`userEntity`](https://www.w3.org/TR/webauthn/#dictdef-publickeycredentialuserentity) parameter.
@@ -53,37 +58,77 @@ where **`salt`** is any string of the implementers choosing and  **`hash`** is a
 **`credentialMac`** is a message authentication code that ensures the Credential ID has not been modified since it was created by the authenticator.
 
 ```
-credentialMac = SHA256HMAC(seedKey, rpId || version || uniqueId || extState)
+credentialMac = SHA256HMAC(seedKey, rpIdHash || version || uniqueId || extState)
 ```
 
 ### Deriving the ES256 public key
 
-Derive the private key **`es256SPrivateKey`**  from the `seedKey` on the authenticator, the `rpId` from the relying party, and the `credentialMac` field from the `credentialId` (which, as a MAC, effectively encapsulates the three other fields of `credentialId`.
+Derive the private key **`es256SPrivateKey`**  from the `seedKey` on the authenticator, the `rpIdHash` from the relying party, and the `credentialMac` field from the `credentialId` (which, as a MAC, effectively encapsulates the three other fields of `credentialId`.
 
 
 Following [NIST FIPS 186.4](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf) Section Section B.4.2,
-derive the secret key by testing randomly-generated 32-byte candidate sequences c_0, c_1, ... c_i of the form 
+derive the secret key by testing randomly-generated 32-byte candidate sequences C[0], C[1], ... of the form 
 
 ```
-c[0] = SHA256HMAC(seedKey, rpId || credentialMac)
-c[i] = SHA256HMAC(seedKey, c[i-1])
+C[0] = SHA256HMAC(seedKey, credentialMac)
+C[i] = SHA256HMAC(seedKey, C[i-1])
 ```
 
-The 32-byte blocks are converted to numbers by interpreting them in little endian form. 
-So, the algorithm is:
+The (pseudo)random 32-byte blocks are converted to pseudorandom numbers by interpreting them in
+little endian form and then subtracting 1.  (The reason for subtracting 1 will be covered shortly.)
+```
+c = BYTE_ARRAY_TO_UNSIGNED_BIG_INT_LITTLE_ENDIAN(C[i]) - 1;
+```
+
+[NIST FIPS 186.4](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf) B.4.2 specifies the
+following algorithm
 
 ```
-b = SHA256HMAC(seedKey, rpId || credentialMac);
-c = BYTE_ARRAY_TO_UNSIGNED_BIT_INT_LITTLE_ENDIAN(b);
-while (c <= p-2) {
-  b = SHA256HMAC(seedKey, c);
-  c = BYTE_ARRAY_TO_UNSIGNED_BIT_INT_LITTLE_ENDIAN(b);
-}
-// d is the private key
+var i = 0;
+var c;
+do () {
+  // B.4.2 Step 4: Obtain a string of N returned_bits from an RBG with a security strength
+  // (Our deterministic random bit generation algorithm is not part of B.4.2)
+  C[i] = i == 0 ? SHA256HMAC(seedKey, credentialMac) : SHA256HMAC(seedKey, C[i-1]);
+  i = i +1;
+
+  // B.4.2. Step 5: Convert returned_bits to the (non-negative) integer c (see Appendix C.2.1).
+  c = BYTE_ARRAY_TO_UNSIGNED_BIG_INT_LITTLE_ENDIAN(C[i]) - 1;
+
+} while (c > p-2) // B.4.2 Step 6 
+
+// B.4.2. Step 7 (d is the private key)
 d = c + 1;
-// Q is the public key
+
+// B.4.2. Step 8 (Q is the public key)
 Q = dG;
 ```
+
+Subtracting one when converting the bits to an unsigned integer c (Step 5)
+allows us to simplify implementations to use a common candidate-testing feature in hardware,
+while still conforming to [NIST FIPS 186.4](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-4.pdf) B.4.2.
+
+```
+var i = 0;
+var c;
+do () {
+  // B.4.2 Step 4: Obtain a string of N returned_bits from an RBG with a security strength
+  // (Our deterministic random bit generation algorithm is not part of B.4.2)
+  C[i] = i == 0 ? SHA256HMAC(seedKey, credentialMac) : SHA256HMAC(seedKey, C[i-1]);
+  i = i +1;
+
+  // B.4.2. Step 5: Convert returned_bits to the (non-negative) integer c (see Appendix C.2.1).
+  cPlusOne = BYTE_ARRAY_TO_UNSIGNED_BIG_INT_LITTLE_ENDIAN(C[i]);
+
+} while (cPlusOne => p || cPlusOne == 0) // B.4.2 Step 6 
+
+// B.4.2. Step 7 (d is the private key)
+d = cPlusOne;
+
+// B.4.2. Step 8 (Q is the public key)
+Q = dG;
+```
+
 
 ### Setting the [Signature Counter](https://www.w3.org/TR/webauthn/#signature-counter)
 
