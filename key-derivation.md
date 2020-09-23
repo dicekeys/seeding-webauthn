@@ -120,7 +120,7 @@ do () {
   // B.4.2. Step 5: Convert returned_bits to the (non-negative) integer c (see Appendix C.2.1).
   cPlusOne = BYTE_ARRAY_TO_UNSIGNED_BIG_INT_LITTLE_ENDIAN(C[i]);
 
-} while (cPlusOne => p || cPlusOne == 0) // B.4.2 Step 6 
+} while (cPlusOne >= p || cPlusOne == 0) // B.4.2 Step 6 
 
 // B.4.2. Step 7 (d is the private key)
 d = cPlusOne;
