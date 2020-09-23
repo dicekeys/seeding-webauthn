@@ -20,7 +20,7 @@ This secret key is the only information an authenticator should require to authe
 
 **`extState`** is an optional field of 0 and 256 bytes and is written to the authenticator along with the `seedKey`.  It is stored in plaintext within the Credential ID so that the relying party will keep a copy of it and share it with any party that attempts to authenticate. The field may contain information used to locate or re-generate the `seedKey` if an authenticator needs to be replaced.  Since this field is stored in plaintext with the relying party, it should not be used without careful consideration of the risks of sharing the information therein with the relying party, and the potential to make Credential IDs linkable.  (The degree of this risk depends on whether the value is quite common among multiple users or unique to each user.)
 
-### Relying Party ID (**`rpId`**) and hash (**`rpIdHash`**)
+### Relying Party ID (**`rpId`**) and its hash (**`rpIdHash`**)
 
 
 **`rpId`** is the [relying party identifier](https://www.w3.org/TR/webauthn/#relying-party-identifier) passed to [`authenticatorMakeCredential`](https://www.w3.org/TR/webauthn/#op-make-cred) via the the [`id`](https://www.w3.org/TR/webauthn/#dom-publickeycredentialrpentity-id) field of the [`rpEntity`](https://www.w3.org/TR/webauthn/#dictionary-pkcredentialentity) parameter, and passed to [authenticatorGetAssertion](https://www.w3.org/TR/webauthn/#op-get-assertion) via the  `rpId` parameter.  Its SHA256 hash is name, [*rpIdHash*`][https://www.w3.org/TR/webauthn/#rpidhash] by the WebAuthN standard and can be used where a fixed-length field is advantageous.
