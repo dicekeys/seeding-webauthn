@@ -1,11 +1,10 @@
-# Seeded WebAuthN Authenticator Specification
+# Seeding WebAuthN Authenticator Credentials
 
-This specification defines how create non-resident credentials for [WebAuthN]((https://www.w3.org/TR/webauthn))/FIDO2 from a 256-bit seed key (**`seedKey`**) and to authenticate with those credentials.
+This specification defines how create non-resident credentials for [WebAuthN]((https://www.w3.org/TR/webauthn))/FIDO2 from a 256-bit seed key and to authenticate with those credentials.
 
 Specifically, on calls to [authenticatorMakeCredential](https://www.w3.org/TR/webauthn/#op-make-cred), an authenticator will use the `seedKey` to generate a [Credential ID](https://www.w3.org/TR/webauthn/#credential-id) and public/private authentication key pair, sending the Credential ID and public key to the relying party.
 
 On calls to [authenticatorGetAssertion](https://www.w3.org/TR/webauthn/#op-get-assertion), an authenticator will use the `seedKey` to validate that the Credential ID was generated from `seedKey` for use by the requesting relying party, and then to re-derive the private key needed to authenticate.
-
 
 ## Prerequisites
 
